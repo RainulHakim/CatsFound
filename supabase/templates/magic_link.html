@@ -1,0 +1,16 @@
+<!-- CatFound sign-in email. Keep in sync with the hosted project's Magic Link template. -->
+<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #1b2228; max-width: 480px;">
+  <h1 style="font-size: 20px; margin: 0 0 16px;">Sign in to CatFound</h1>
+  <p style="margin: 0 0 8px;">Your sign-in code:</p>
+  <p style="font-size: 32px; font-weight: 700; letter-spacing: 6px; margin: 0 0 24px;">{{ .Token }}</p>
+  <p style="margin: 0 0 16px;">Or open this link on the device you want to sign in on:</p>
+  <p style="margin: 0 0 24px;">
+    <a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email"
+       style="background: #0f5e63; color: #ffffff; padding: 12px 20px; border-radius: 8px; text-decoration: none; display: inline-block;">
+      Sign in
+    </a>
+  </p>
+  <p style="color: #55606a; font-size: 14px; margin: 0;">
+    The code and link expire in 15 minutes. If you didn't ask to sign in, you can ignore this email.
+  </p>
+</div>
