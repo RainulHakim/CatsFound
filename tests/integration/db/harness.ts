@@ -15,10 +15,7 @@ export interface Db {
   close(): Promise<void>;
 }
 
-export type Actor =
-  | { kind: "anon" }
-  | { kind: "user"; id: string }
-  | { kind: "service" };
+export type Actor = { kind: "anon" } | { kind: "user"; id: string } | { kind: "service" };
 
 const ROOT = join(__dirname, "..", "..", "..");
 const MIGRATIONS = join(ROOT, "supabase", "migrations");

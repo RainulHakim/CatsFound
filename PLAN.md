@@ -10,46 +10,47 @@ Read §A first. It lists the places where I think the spec is wrong or ambiguous
 
 **1. Several drop-off points vs. "pickup at the Union desk, always" (§10.3).**
 You said finders can drop items at the Union, Chambers or Wall. §10.3 says sensitive items are picked up at the Union, always.
-*Proposal:* the drop-off choice appears on the success screen, after posting, so it costs nothing against the 15-second target. Non-sensitive items offer all three points and default to the Union. Sensitive items show only the Union, and the copy explains why. Drop-off points get their own table, and each item stores a `drop_off_point_id` so the owner knows where to go. *Open question for you:* are Chambers and Wall staffed desks, or unattended bins?
+_Proposal:_ the drop-off choice appears on the success screen, after posting, so it costs nothing against the 15-second target. Non-sensitive items offer all three points and default to the Union. Sensitive items show only the Union, and the copy explains why. Drop-off points get their own table, and each item stores a `drop_off_point_id` so the owner knows where to go. _Open question for you:_ are Chambers and Wall staffed desks, or unattended bins?
 
 **2. Phase 1 can't auto-suggest a category from the photo.**
 Suggesting a category from an image needs a vision model. That means a paid external API on the critical path, which works against P1 (an extra round trip on campus wifi), the budget, and §8's rule that nothing may hard-depend on AI.
-*Proposal:* Phase 1 ships a large icon grid of categories. The six most-posted categories come first, and one tap picks a category. Auto-suggest moves to Phase 4 as a zero-shot CLIP pass that can only re-order the grid, never block it.
+_Proposal:_ Phase 1 ships a large icon grid of categories. The six most-posted categories come first, and one tap picks a category. Auto-suggest moves to Phase 4 as a zero-shot CLIP pass that can only re-order the grid, never block it.
 
 **3. RLS can't hide columns.**
 `items.verification_secret`, `posted_by` and `posted_by_contact` sit on a row that students can read, so RLS alone would expose them. Column grants would work, but they break quietly whenever someone adds a column.
-*Proposal:* move those three fields into an `item_private` table (1:1 with items) that only staff and the original poster can read. This also guarantees that finder identity never reaches the browse query.
+_Proposal:_ move those three fields into an `item_private` table (1:1 with items) that only staff and the original poster can read. This also guarantees that finder identity never reaches the browse query.
 
 **4. Students need to see sensitive items as placeholders, but must not see their rows.**
 §5.2 requires a "wallet found in Chambers" card; §10.3 says no photo and no detail.
-*Proposal:* add a `browse_items` view that returns only safe columns. For sensitive rows it returns null description, colours and photos. Students read from the view. RLS on the base `items` table allows staff and the poster only. Photo storage policies also check the item isn't sensitive, so a guessed storage path still returns nothing.
+_Proposal:_ add a `browse_items` view that returns only safe columns. For sensitive rows it returns null description, colours and photos. Students read from the view. RLS on the base `items` table allows staff and the poster only. Photo storage policies also check the item isn't sensitive, so a guessed storage path still returns nothing.
 
 **5. Supabase Auth would accept any email if called directly.**
 The anon key is public, so anyone can call `signInWithOtp` with a gmail address and skip our server checks.
-*Proposal:* enforce `@davidson.edu` in three places: the Zod schema, the server action, and a Postgres trigger on `auth.users` that rejects every other domain. The trigger is the real guarantee; the other two give friendly error messages. The trigger also lowercases the address and rejects `+tags`, so one person can't create several accounts.
+_Proposal:_ enforce `@davidson.edu` in three places: the Zod schema, the server action, and a Postgres trigger on `auth.users` that rejects every other domain. The trigger is the real guarantee; the other two give friendly error messages. The trigger also lowercases the address and rejects `+tags`, so one person can't create several accounts.
 
 **6. The 10 MB upload cap is moot on Vercel.**
 Vercel function bodies are capped at about 4.5 MB, and phone photos are 3–12 MB. Sending the raw file over campus wifi would also break the 15-second target.
-*Proposal:* the browser resizes each photo to at most 2048 px JPEG (about 400–900 KB) before upload. The canvas re-encode also drops EXIF in the browser as a side effect. The server still does everything §10.1 requires: magic-byte MIME sniffing, a 4 MB cap, a full decode and re-encode to WebP with sharp, and a test proving the output has no EXIF or GPS. The server is the guarantee and the client step is an optimisation. If the browser can't resize, the user sees a clear error rather than a silent failure.
+_Proposal:_ the browser resizes each photo to at most 2048 px JPEG (about 400–900 KB) before upload. The canvas re-encode also drops EXIF in the browser as a side effect. The server still does everything §10.1 requires: magic-byte MIME sniffing, a 4 MB cap, a full decode and re-encode to WebP with sharp, and a test proving the output has no EXIF or GPS. The server is the guarantee and the client step is an optimisation. If the browser can't resize, the user sees a clear error rather than a silent failure.
 
 **7. A strict CSP makes every page dynamic.**
 A nonce-based CSP without `unsafe-inline` is the only real CSP Next.js supports, and nonces force dynamic rendering. Public pages are then server-rendered on every request instead of served from cache.
-*Proposal:* accept that. Server rendering on Vercel is fast enough to hit LCP < 2.5 s. I'll check it with Lighthouse rather than weaken the CSP.
+_Proposal:_ accept that. Server rendering on Vercel is fast enough to hit LCP < 2.5 s. I'll check it with Lighthouse rather than weaken the CSP.
 
 **8. "Purge as a scheduled job from day one" (§10.4) vs. retention listed under Phase 3.**
-*Proposal:* build the purge in Phase 1 as a daily Vercel Cron route protected by a secret. It deletes photos and records 90 days after an item is `collected` or `archived`, plus orphaned uploads. It has little to do until Phase 3, but it'll be tested and running from launch.
+_Proposal:_ build the purge in Phase 1 as a daily Vercel Cron route protected by a secret. It deletes photos and records 90 days after an item is `collected` or `archived`, plus orphaned uploads. It has little to do until Phase 3, but it'll be tested and running from launch.
 
 **9. Rate limiting needs a store.**
 Serverless functions don't share memory between requests. Upstash would add another service.
-*Proposal:* a Postgres `rate_limits` table with an atomic `hit(key, window, max)` function. That's enough at pilot scale, and it's free.
+_Proposal:_ a Postgres `rate_limits` table with an atomic `hit(key, window, max)` function. That's enough at pilot scale, and it's free.
 
 **10. Tier 0 relies on category groups, which §7 doesn't define.**
-*Proposal:* add a `categories.group_slug` column now (for example, earbuds and headphones both go in `audio`), so the Phase 2 matcher has the data.
+_Proposal:_ add a `categories.group_slug` column now (for example, earbuds and headphones both go in `audio`), so the Phase 2 matcher has the data.
 
 **11. Multi-campus support.**
-*Proposal:* create a `campuses` table with one row, and add `campus_id` to `buildings`, `categories` and `drop_off_points` only. Items get their campus through their building. Adding tenancy later is then an additive migration. There's no tenancy UI or logic.
+_Proposal:_ create a `campuses` table with one row, and add `campus_id` to `buildings`, `categories` and `drop_off_points` only. Items get their campus through their building. Adding tenancy later is then an additive migration. There's no tenancy UI or logic.
 
 **12. Things I won't show in Phase 1, following rule 7.**
+
 - `/me` shows "My posts" only. Lost reports (Phase 2) and claims (Phase 3) don't appear at all; there are no empty sections for them.
 - The item detail page has no "This is mine" button. It says "Ask for it at the {drop-off point}", which is accurate before the claim flow exists. "I lost something" on the landing page leads to sign-in, then to browse, until Phase 2 adds lost reports.
 
@@ -84,7 +85,7 @@ Each bullet is roughly one commit. Tests are written in the same commit as the c
 3. **Post a found item: the screen (`/found/new`).** In this order:
    - The photo button is a real `<input type="file" accept="image/*" capture="environment">`, so phones open the camera directly and it works without JavaScript.
    - Then the category grid and the building list. With permission, the building list sorts nearest-first using geolocation calculated in the browser only; coordinates are never sent to the server.
-   - Then the secret field, with the helper line *"Add one detail only the owner would know — it's how we'll know it's really theirs."*
+   - Then the secret field, with the helper line _"Add one detail only the owner would know — it's how we'll know it's really theirs."_
    - Then the collapsed "Tell me when it's returned" email field.
    - The primary button sits fixed in the bottom third of the screen.
    - The draft (photos as blobs plus fields) is saved in IndexedDB and restored on reload.

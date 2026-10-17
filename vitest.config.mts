@@ -13,7 +13,12 @@ export default defineConfig({
     },
     projects: [
       {
-        resolve: { alias: { ...alias, "server-only": fileURLToPath(new URL("./tests/stubs/server-only.ts", import.meta.url)) } },
+        resolve: {
+          alias: {
+            ...alias,
+            "server-only": fileURLToPath(new URL("./tests/stubs/server-only.ts", import.meta.url)),
+          },
+        },
         test: {
           name: "unit",
           include: ["tests/unit/**/*.test.ts"],

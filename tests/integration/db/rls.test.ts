@@ -66,7 +66,9 @@ describe("auth.users domain enforcement", () => {
       "a+alt@davidson.edu",
       "a@sub.davidson.edu",
     ]) {
-      await expect(db.query("insert into auth.users (email) values ($1)", [email])).rejects.toThrow();
+      await expect(
+        db.query("insert into auth.users (email) values ($1)", [email]),
+      ).rejects.toThrow();
     }
   });
 
@@ -94,10 +96,12 @@ describe("reference data", () => {
 
   it("is not writable by anyone but the service role", async () => {
     for (const actor of [ANON, user(alice), user(staff)]) {
-      expect(await errorAs(db, actor, "delete from public.categories")).toMatch(/permission denied/);
-      expect(
-        await errorAs(db, actor, "update public.buildings set name = 'x'"),
-      ).toMatch(/permission denied/);
+      expect(await errorAs(db, actor, "delete from public.categories")).toMatch(
+        /permission denied/,
+      );
+      expect(await errorAs(db, actor, "update public.buildings set name = 'x'")).toMatch(
+        /permission denied/,
+      );
     }
   });
 });
@@ -122,7 +126,9 @@ describe("users", () => {
 
   it("a student cannot promote themselves", async () => {
     expect(
-      await errorAs(db, user(alice), "update public.users set role = 'admin' where id = $1", [alice.id]),
+      await errorAs(db, user(alice), "update public.users set role = 'admin' where id = $1", [
+        alice.id,
+      ]),
     ).toMatch(/permission denied/);
   });
 
@@ -243,13 +249,19 @@ describe("item_private (finder identity + verification secret)", () => {
   });
 
   it("anon has no access", async () => {
-    expect(await errorAs(db, ANON, "select * from public.item_private")).toMatch(/permission denied/);
+    expect(await errorAs(db, ANON, "select * from public.item_private")).toMatch(
+      /permission denied/,
+    );
   });
 });
 
 describe("item_photos", () => {
   it("follow item visibility: no photos of sensitive items for students", async () => {
-    const rows = await as<{ item_id: string }>(db, user(bob), "select item_id from public.item_photos");
+    const rows = await as<{ item_id: string }>(
+      db,
+      user(bob),
+      "select item_id from public.item_photos",
+    );
     const ids = rows.map((r) => r.item_id);
     expect(ids).toContain(openItem);
     expect(ids).not.toContain(sensitiveItem);
@@ -311,19 +323,29 @@ describe("matches", () => {
        values ($1, $2, 0.9, 0) returning id`,
       [report!.id, openItem],
     );
-    expect(await as(db, user(bob), "select id from public.matches where id = $1", [match!.id])).toHaveLength(0);
     expect(
-      await as(db, user(bob), "update public.matches set dismissed_at = now() where id = $1 returning id", [
-        match!.id,
-      ]),
+      await as(db, user(bob), "select id from public.matches where id = $1", [match!.id]),
     ).toHaveLength(0);
     expect(
-      await as(db, user(alice), "update public.matches set dismissed_at = now() where id = $1 returning id", [
-        match!.id,
-      ]),
+      await as(
+        db,
+        user(bob),
+        "update public.matches set dismissed_at = now() where id = $1 returning id",
+        [match!.id],
+      ),
+    ).toHaveLength(0);
+    expect(
+      await as(
+        db,
+        user(alice),
+        "update public.matches set dismissed_at = now() where id = $1 returning id",
+        [match!.id],
+      ),
     ).toHaveLength(1);
     expect(
-      await errorAs(db, user(alice), "update public.matches set score = 1 where id = $1", [match!.id]),
+      await errorAs(db, user(alice), "update public.matches set score = 1 where id = $1", [
+        match!.id,
+      ]),
     ).toMatch(/permission denied/);
   });
 });
@@ -345,17 +367,27 @@ describe("claims", () => {
       "insert into public.claims (item_id, claimant_id) values ($1, $2) returning id",
       [openItem, alice.id],
     );
-    expect(await as(db, user(bob), "select id from public.claims where id = $1", [claim!.id])).toHaveLength(0);
-    expect(await as(db, user(alice), "select id from public.claims where id = $1", [claim!.id])).toHaveLength(1);
     expect(
-      await as(db, user(alice), "update public.claims set status = 'approved' where id = $1 returning id", [
-        claim!.id,
-      ]),
+      await as(db, user(bob), "select id from public.claims where id = $1", [claim!.id]),
     ).toHaveLength(0);
     expect(
-      await as(db, user(staff), "update public.claims set status = 'approved' where id = $1 returning id", [
-        claim!.id,
-      ]),
+      await as(db, user(alice), "select id from public.claims where id = $1", [claim!.id]),
+    ).toHaveLength(1);
+    expect(
+      await as(
+        db,
+        user(alice),
+        "update public.claims set status = 'approved' where id = $1 returning id",
+        [claim!.id],
+      ),
+    ).toHaveLength(0);
+    expect(
+      await as(
+        db,
+        user(staff),
+        "update public.claims set status = 'approved' where id = $1 returning id",
+        [claim!.id],
+      ),
     ).toHaveLength(1);
   });
 });
@@ -368,15 +400,21 @@ describe("audit log", () => {
     );
     expect(await as(db, user(alice), "select id from public.audit_log")).toHaveLength(0);
     expect(await as(db, user(staff), "select id from public.audit_log")).toHaveLength(0);
-    expect((await as(db, user(admin), "select id from public.audit_log")).length).toBeGreaterThan(0);
-    expect(await errorAs(db, user(admin), "delete from public.audit_log")).toMatch(/permission denied/);
+    expect((await as(db, user(admin), "select id from public.audit_log")).length).toBeGreaterThan(
+      0,
+    );
+    expect(await errorAs(db, user(admin), "delete from public.audit_log")).toMatch(
+      /permission denied/,
+    );
   });
 });
 
 describe("internal tables", () => {
   it("rate_limits and metrics_events are closed to anon and users", async () => {
     for (const actor of [ANON, user(alice), user(admin)]) {
-      expect(await errorAs(db, actor, "select * from public.rate_limits")).toMatch(/permission denied/);
+      expect(await errorAs(db, actor, "select * from public.rate_limits")).toMatch(
+        /permission denied/,
+      );
       expect(await errorAs(db, actor, "select * from public.metrics_events")).toMatch(
         /permission denied/,
       );
@@ -384,9 +422,9 @@ describe("internal tables", () => {
   });
 
   it("rate_limit_hit is callable only by the service role, and enforces the max", async () => {
-    expect(
-      await errorAs(db, user(alice), "select public.rate_limit_hit('k', 60, 1)"),
-    ).toMatch(/permission denied/);
+    expect(await errorAs(db, user(alice), "select public.rate_limit_hit('k', 60, 1)")).toMatch(
+      /permission denied/,
+    );
     const key = `test:${Date.now()}`;
     const results: boolean[] = [];
     for (let i = 0; i < 4; i++) {

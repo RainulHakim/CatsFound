@@ -7,3 +7,5 @@ supabase/.temp
 CatsFound
 package-lock.json
 SPEC.md
+supabase/templates
+.claude
