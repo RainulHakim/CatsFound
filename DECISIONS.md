@@ -43,3 +43,7 @@ No Docker on the dev machine. Local development points at a hosted Supabase dev 
 **Health check uses GET, not HEAD.** supabase-js reports no error for a HEAD request that 404s, so a missing schema looked healthy. This was found while testing against the un-migrated hosted project.
 
 **Sentry: server-side only for now.** The SDK loads only when `SENTRY_DSN` is set, and every data-collection category is off, including URL query params, since sign-in links carry tokens. Client-side capture waits until Phase 1, where its bundle cost can be weighed against the Lighthouse budget.
+
+## 2026-10-17 — Sign-in switched off behind `AUTH_ENABLED`
+
+Sign-in failed on the hosted project for three setup reasons, none of them code bugs: `SUPABASE_SECRET_KEY` was missing, so the action crashed on the env check; the migrations hadn't been applied, so there was no rate-limit function and no `users` table; and custom SMTP wasn't configured. Following rule 7 (if it doesn't work, it isn't in the UI), sign-in is hidden behind a server-side `AUTH_ENABLED=true` flag. Off means no sign-in links, 404 on `/sign-in` and `/auth/confirm`, and the Server Actions refuse requests even if called directly by action ID. It's an explicit flag rather than auto-detection, because no environment check can confirm that SMTP actually delivers mail. The sign-in actions now catch provider and configuration errors and show a message instead of crashing the page. CI and the Playwright test server run with the flag on, so the sign-in path stays tested.

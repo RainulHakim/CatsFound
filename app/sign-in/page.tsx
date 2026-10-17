@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
+import { isAuthEnabled } from "@/lib/auth/enabled";
 import { redirect } from "next/navigation";
 import { getUser } from "@/lib/auth";
 import { safeNextPath } from "@/lib/security/redirect";
@@ -10,6 +12,7 @@ export const metadata: Metadata = {
 };
 
 export default async function SignInPage({ searchParams }: PageProps<"/sign-in">) {
+  if (!isAuthEnabled()) notFound();
   const params = await searchParams;
   const next = safeNextPath(typeof params.next === "string" ? params.next : undefined);
   if (await getUser()) redirect(next);

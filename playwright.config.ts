@@ -29,6 +29,8 @@ export default defineConfig({
         command: `npx next start -p ${PORT}`,
         url: `${baseURL}/sign-in`,
         reuseExistingServer: !process.env.CI,
+        // The sign-in UI is under test, so it is switched on for the test server.
+        env: { AUTH_ENABLED: "true" },
         timeout: 60_000,
       },
 });

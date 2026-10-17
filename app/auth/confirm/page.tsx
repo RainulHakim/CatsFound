@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
+import { isAuthEnabled } from "@/lib/auth/enabled";
 import { ConfirmForm } from "./confirm-form";
 
 export const metadata: Metadata = {
@@ -12,6 +14,7 @@ export const metadata: Metadata = {
  * one-time token. The user presses a button, which POSTs.
  */
 export default async function ConfirmPage({ searchParams }: PageProps<"/auth/confirm">) {
+  if (!isAuthEnabled()) notFound();
   const params = await searchParams;
   const tokenHash = typeof params.token_hash === "string" ? params.token_hash : "";
   const type = typeof params.type === "string" ? params.type : "";

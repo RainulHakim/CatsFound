@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { SessionUser } from "@/lib/auth";
+import { isAuthEnabled } from "@/lib/auth/enabled";
 import { signOut } from "@/app/actions/auth";
 
 export function SiteHeader({ user }: { user: SessionUser | null }) {
@@ -13,7 +14,7 @@ export function SiteHeader({ user }: { user: SessionUser | null }) {
           CatFound
         </Link>
         <nav aria-label="Account">
-          {user ? (
+          {!isAuthEnabled() ? null : user ? (
             <form action={signOut}>
               <button
                 type="submit"

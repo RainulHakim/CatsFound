@@ -34,6 +34,7 @@ jobs:
     needs: checks
     env:
       NEXT_PUBLIC_SITE_URL: http://localhost:3100
+      AUTH_ENABLED: "true"
       APP_ENCRYPTION_KEY: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
       IP_HASH_SALT: ci-only-ip-hash-salt-not-secret
       CRON_SECRET: ci-only-cron-secret-not-secret

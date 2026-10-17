@@ -3,6 +3,8 @@
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { auth, type AuthFailure } from "@/lib/auth";
+import { isAuthEnabled } from "@/lib/auth/enabled";
+import { log } from "@/lib/log";
 import { clientIp } from "@/lib/security/request";
 import { safeNextPath } from "@/lib/security/redirect";
 import { signInRequestSchema, verifyCodeSchema, verifyLinkSchema } from "@/lib/validation/auth";
@@ -22,10 +24,23 @@ const MESSAGES: Record<AuthFailure, string> = {
   rate_limited: "Too many attempts. Wait a few minutes and try again.",
   invalid_code: "That code didn't match. Check the email and try again.",
   expired_or_used: "That code or link has expired or was already used. Request a new one.",
-  provider_error: "We couldn't send the email just now. Try again in a minute.",
+  provider_error: "Sign-in isn't working right now. Try again in a minute.",
 };
 
+const DISABLED = "Sign-in isn't available yet.";
+
+/** A misconfigured server must produce a message, not a crashed page. */
+async function safely<T>(fn: () => Promise<T>, onError: T): Promise<T> {
+  try {
+    return await fn();
+  } catch (err) {
+    log.error({ err: err instanceof Error ? err.message : String(err) }, "sign-in failed");
+    return onError;
+  }
+}
+
 export async function requestSignIn(_prev: SignInState, formData: FormData): Promise<SignInState> {
+  if (!isAuthEnabled()) return { step: "email", error: DISABLED };
   const parsed = signInRequestSchema.safeParse({
     email: formData.get("email") ?? "",
     next: formData.get("next") ?? undefined,
@@ -36,7 +51,10 @@ export async function requestSignIn(_prev: SignInState, formData: FormData): Pro
   }
 
   const ip = clientIp(await headers());
-  const result = await auth.requestSignIn(parsed.data.email, { ip });
+  const result = await safely(() => auth.requestSignIn(parsed.data.email, { ip }), {
+    ok: false as const,
+    reason: "provider_error" as const,
+  });
   if (!result.ok) {
     return { step: "email", email: parsed.data.email, next, error: MESSAGES[result.reason] };
   }
@@ -53,6 +71,7 @@ export async function requestSignIn(_prev: SignInState, formData: FormData): Pro
 }
 
 export async function verifyCode(_prev: SignInState, formData: FormData): Promise<SignInState> {
+  if (!isAuthEnabled()) return { step: "email", error: DISABLED };
   const parsed = verifyCodeSchema.safeParse({
     email: formData.get("email") ?? "",
     code: formData.get("code") ?? "",
@@ -66,7 +85,10 @@ export async function verifyCode(_prev: SignInState, formData: FormData): Promis
     return { step: "code", email, next, fieldError: parsed.error.issues[0]?.message };
   }
 
-  const result = await auth.verifyCode(parsed.data.email, parsed.data.code);
+  const result = await safely(() => auth.verifyCode(parsed.data.email, parsed.data.code), {
+    ok: false as const,
+    reason: "provider_error" as const,
+  });
   if (!result.ok) {
     return { step: "code", email: parsed.data.email, next, error: MESSAGES[result.reason] };
   }
@@ -77,13 +99,17 @@ export async function verifyCode(_prev: SignInState, formData: FormData): Promis
 export type ConfirmState = { error?: string };
 
 export async function confirmLink(_prev: ConfirmState, formData: FormData): Promise<ConfirmState> {
+  if (!isAuthEnabled()) return { error: DISABLED };
   const parsed = verifyLinkSchema.safeParse({
     token_hash: formData.get("token_hash"),
     type: formData.get("type"),
   });
   if (!parsed.success) return { error: MESSAGES.expired_or_used };
 
-  const result = await auth.verifyLink(parsed.data.token_hash);
+  const result = await safely(() => auth.verifyLink(parsed.data.token_hash), {
+    ok: false as const,
+    reason: "provider_error" as const,
+  });
   if (!result.ok) return { error: MESSAGES[result.reason] };
 
   const store = await cookies();

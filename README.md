@@ -4,7 +4,7 @@ A mobile-friendly web app (for now), launched through the Union, that matches fi
 
 A peer-to-peer lost & found for Davidson College. Finders post in seconds without an account; students search, and (from Phase 2) get an email the moment something matching turns up. See [SPEC.md](SPEC.md) for the product, [PLAN.md](PLAN.md) for the build plan and [DECISIONS.md](DECISIONS.md) for why things are the way they are.
 
-**Status:** Phase 0 (foundation) in progress.
+**Status:** Phase 0 (foundation) built. Sign-in is switched off (`AUTH_ENABLED=false`) until the hosted Supabase project is set up; see [Turning on sign-in](#turning-on-sign-in).
 
 ## Stack
 
@@ -58,6 +58,16 @@ Sign-in needs these settings in the hosted project:
 4. **Authentication → Providers → Email.** Set _Email OTP expiration_ to `900` seconds and _Email OTP length_ to `6`.
 
 The `@davidson.edu` restriction is enforced by a database trigger on `auth.users`, so it holds even if someone calls Supabase Auth directly.
+
+### Turning on sign-in
+
+Sign-in is hidden, and its pages and actions are disabled, while `AUTH_ENABLED` is anything other than `true`. Turn it on only after all of these are done:
+
+1. `SUPABASE_SECRET_KEY` and `SUPABASE_DB_URL` are in `.env.local`.
+2. `npm run db:push` has applied the migrations and seed. `GET /api/health` returns `200` with `"db":"ok"`.
+3. The dashboard settings above are in place: Resend SMTP, the email template, and the redirect URLs.
+
+Then set `AUTH_ENABLED=true`, locally in `.env.local` and in Vercel's environment variables. Sign-in code is tested end-to-end in CI regardless of this flag.
 
 ## Scripts
 
