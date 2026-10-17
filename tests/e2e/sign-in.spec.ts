@@ -15,7 +15,9 @@ test("rejects non-Davidson emails with an announced, linked error", async ({ pag
 test("the emailed link does not sign in on GET", async ({ page }) => {
   await page.goto("/auth/confirm?token_hash=abcdefghijkl&type=email");
   await expect(page.getByRole("button", { name: "Sign in to CatFound" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Sign in" })).toBeVisible(); // still signed out
+  await expect(
+    page.getByRole("navigation", { name: "Account" }).getByRole("link", { name: "Sign in" }),
+  ).toBeVisible(); // still signed out
 });
 
 // Full round trip needs a mail catcher: runs in CI against the local Supabase stack.
@@ -46,7 +48,9 @@ test.describe("full sign-in", () => {
     expect(session?.sameSite).toBe("Lax");
 
     await page.getByRole("button", { name: "Sign out" }).click();
-    await expect(page.getByRole("link", { name: "Sign in" })).toBeVisible();
+    await expect(
+      page.getByRole("navigation", { name: "Account" }).getByRole("link", { name: "Sign in" }),
+    ).toBeVisible();
   });
 });
 
