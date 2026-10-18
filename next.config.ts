@@ -17,6 +17,10 @@ const nextConfig: NextConfig = {
   // Cache Components / PPR is incompatible with nonce-based CSP. See DECISIONS.md.
   cacheComponents: false,
   poweredByHeader: false,
+  // Photos are resized in the browser first (≈300–500 KB each, max 4).
+  // Vercel caps request bodies at 4.5 MB, so stay just under it.
+  experimental: { serverActions: { bodySizeLimit: "4.4mb" } },
+  serverExternalPackages: ["sharp"],
   turbopack: {
     rules: {
       "*.css": {
