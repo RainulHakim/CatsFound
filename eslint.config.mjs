@@ -10,6 +10,11 @@ const eslintConfig = defineConfig([
       // Use lib/log.ts. Structured logs only in production paths.
       "no-console": "error",
       "@typescript-eslint/consistent-type-imports": "error",
+      // Apostrophes and quotes in JSX copy render correctly; the rule only adds noise.
+      "react/no-unescaped-entities": "off",
+      // Photos are served by our own access-checked route (/api/photos) with a
+      // hand-built srcset and blurhash; next/image's optimizer would bypass that.
+      "@next/next/no-img-element": "off",
     },
   },
   {

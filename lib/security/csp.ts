@@ -2,10 +2,11 @@
 export function buildCsp(opts: {
   nonce: string;
   isDev: boolean;
-  supabaseUrl: string;
+  /** Only needed while Supabase Auth is in use. */
+  supabaseUrl?: string;
   upgradeInsecure: boolean;
 }): string {
-  const supabase = new URL(opts.supabaseUrl).origin;
+  const supabase = opts.supabaseUrl ? [new URL(opts.supabaseUrl).origin] : [];
   const directives: [string, string[]][] = [
     ["default-src", ["'self'"]],
     [
@@ -19,11 +20,11 @@ export function buildCsp(opts: {
     ],
     // Dev tooling injects inline styles; production uses the nonce only.
     ["style-src", ["'self'", opts.isDev ? "'unsafe-inline'" : `'nonce-${opts.nonce}'`]],
-    ["img-src", ["'self'", "blob:", "data:", supabase]],
+    ["img-src", ["'self'", "blob:", "data:"]],
     ["font-src", ["'self'"]],
     [
       "connect-src",
-      ["'self'", supabase, "https://*.ingest.sentry.io", "https://*.ingest.us.sentry.io"],
+      ["'self'", ...supabase, "https://*.ingest.sentry.io", "https://*.ingest.us.sentry.io"],
     ],
     ["worker-src", ["'self'", "blob:"]],
     ["object-src", ["'none'"]],

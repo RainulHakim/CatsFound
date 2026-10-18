@@ -1,7 +1,15 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
-const ROUTES = ["/", "/sign-in", "/auth/confirm?token_hash=abcdefghijkl&type=email"];
+const ROUTES = [
+  "/",
+  "/found/new",
+  "/items",
+  "/about",
+  "/privacy",
+  "/sign-in",
+  "/auth/confirm?token_hash=abcdefghijkl&type=email",
+];
 
 for (const theme of ["light", "dark"] as const) {
   test.describe(`${theme} theme`, () => {
@@ -31,14 +39,21 @@ test("one h1 per page and a working skip link", async ({ page }) => {
   await expect(page.getByRole("link", { name: "Skip to content" })).toBeFocused();
 });
 
-test("primary controls are at least 44×44px", async ({ page }) => {
-  await page.goto("/sign-in");
-  // The skip link is visually hidden (1px) until focused, so it is excluded.
-  for (const el of await page.locator("button, input, a:not(.sr-only)").all()) {
-    if (!(await el.isVisible())) continue;
-    const box = await el.boundingBox();
-    expect(box!.height, await el.evaluate((n) => n.outerHTML.slice(0, 80))).toBeGreaterThanOrEqual(
-      44,
+test("controls are at least 44×44px on the main flows", async ({ page }) => {
+  for (const route of ["/", "/found/new", "/items", "/sign-in"]) {
+    await page.goto(route);
+    // Visually hidden inputs (skip link, file/radio inputs) are excluded; the
+    // labels that wrap them are the real touch targets and are checked instead.
+    const controls = page.locator(
+      "button, a:not(.sr-only), select, input:not(.sr-only):not([type=hidden]), label:has(> input.sr-only)",
     );
+    for (const el of await controls.all()) {
+      if (!(await el.isVisible())) continue;
+      // The off-screen spam honeypot is hidden from people and assistive tech.
+      if (await el.evaluate((n) => Boolean(n.closest('[aria-hidden="true"]')))) continue;
+      const box = await el.boundingBox();
+      const what = `${route}: ${await el.evaluate((n) => n.outerHTML.slice(0, 80))}`;
+      expect(box!.height, what).toBeGreaterThanOrEqual(44);
+    }
   }
 });

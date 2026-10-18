@@ -9,6 +9,8 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       include: ["lib/**", "app/api/**"],
+      // Browser-only helpers are exercised by the Playwright e2e flow.
+      exclude: ["lib/client/**"],
       thresholds: { lines: 80, functions: 80, branches: 75, statements: 80 },
     },
     projects: [

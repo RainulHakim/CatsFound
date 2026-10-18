@@ -31,11 +31,20 @@ describe("buildCsp", () => {
     expect(csp).toContain("base-uri 'self'");
   });
 
-  it("allows signed photo URLs from the Supabase origin only", () => {
+  it("serves images only from our own origin (photos go through /api/photos)", () => {
     const img = buildCsp(base)
       .split("; ")
       .find((d) => d.startsWith("img-src "))!;
-    expect(img).toBe("img-src 'self' blob: data: https://proj.supabase.co");
+    expect(img).toBe("img-src 'self' blob: data:");
+  });
+
+  it("allows the Supabase origin for connections only when sign-in needs it", () => {
+    const connect = (o: Partial<typeof base>) =>
+      buildCsp({ ...base, ...o })
+        .split("; ")
+        .find((d) => d.startsWith("connect-src "))!;
+    expect(connect({})).toContain("https://proj.supabase.co");
+    expect(connect({ supabaseUrl: undefined })).not.toContain("supabase");
   });
 
   it("allows unsafe-eval in development only", () => {
