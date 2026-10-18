@@ -1,5 +1,5 @@
 import "server-only";
-import { createServiceClient } from "@/lib/db/server";
+import { withActor } from "@/lib/db/sql";
 import { log } from "@/lib/log";
 
 /** Returns true when the hit is allowed. */
@@ -19,16 +19,21 @@ export const LIMITS = {
 
 /** Postgres-backed limiter (public.rate_limit_hit). Fails closed. */
 export const dbLimiter: Limiter = async (key, windowSeconds, max) => {
-  const { data, error } = await createServiceClient().rpc("rate_limit_hit", {
-    p_key: key,
-    p_window_seconds: windowSeconds,
-    p_max: max,
-  });
-  if (error) {
-    log.error({ err: error.message, key: key.split(":")[0] }, "rate limiter unavailable");
+  try {
+    return await withActor({ kind: "service" }, async (db) => {
+      const { rows } = await db.query<{ ok: boolean }>(
+        "select public.rate_limit_hit($1, $2, $3) as ok",
+        [key, windowSeconds, max],
+      );
+      return rows[0]?.ok === true;
+    });
+  } catch (err) {
+    log.error(
+      { err: err instanceof Error ? err.message : String(err), key: key.split(":")[0] },
+      "rate limiter unavailable",
+    );
     return false;
   }
-  return data === true;
 };
 
 /** Every check is counted; the request is allowed only if all pass. */

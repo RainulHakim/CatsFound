@@ -21,33 +21,8 @@ const ROOT = join(__dirname, "..", "..", "..");
 const MIGRATIONS = join(ROOT, "supabase", "migrations");
 
 // Minimal emulation of what Supabase provisions before our migrations run.
-const SUPABASE_STUB = `
-  do $$ begin
-    if not exists (select 1 from pg_roles where rolname = 'anon') then create role anon nologin; end if;
-    if not exists (select 1 from pg_roles where rolname = 'authenticated') then create role authenticated nologin; end if;
-    if not exists (select 1 from pg_roles where rolname = 'service_role') then create role service_role nologin bypassrls; end if;
-  end $$;
-  create schema if not exists extensions;
-  create schema if not exists auth;
-  create schema if not exists storage;
-  create table auth.users (
-    id uuid primary key default gen_random_uuid(),
-    email text,
-    created_at timestamptz default now()
-  );
-  create function auth.uid() returns uuid language sql stable as $$
-    select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid
-  $$;
-  create table storage.buckets (
-    id text primary key, name text not null, public boolean default false,
-    file_size_limit bigint, allowed_mime_types text[]
-  );
-  grant usage on schema public, auth to anon, authenticated, service_role;
-  grant execute on function auth.uid() to anon, authenticated, service_role;
-  -- Supabase grants table privileges to these roles by default.
-  alter default privileges in schema public grant all on tables to anon, authenticated, service_role;
-  alter default privileges in schema public grant all on functions to anon, authenticated, service_role;
-`;
+// Shared with the Neon setup (scripts/db-migrate.mjs).
+const SUPABASE_STUB = readFileSync(join(ROOT, "db", "bootstrap.sql"), "utf8");
 
 function migrationFiles(): string[] {
   return readdirSync(MIGRATIONS)
@@ -68,7 +43,6 @@ async function createPglite(): Promise<Db> {
     // pgvector is not available in PGlite; nothing uses it before Phase 4.
     await pg.exec(sql.replace(/^create extension if not exists vector.*$/m, ""));
   }
-  await pg.exec(`grant all on all tables in schema public to service_role;`);
   await pg.exec(seedSql());
   return {
     async query<T extends Row>(sql: string, params: unknown[] = []) {
@@ -120,9 +94,8 @@ export async function as<T extends Row = Row>(
         JSON.stringify({ sub: actor.id, role: "authenticated" }),
       ]);
       await db.query("set local role authenticated");
-    } else {
-      await db.query("set local role service_role");
     }
+    // "service": stays the database owner, exactly like server code does.
     return await db.query<T>(sql, params);
   } finally {
     await db.query("rollback");

@@ -17,7 +17,9 @@ const base64Key32 = z
   .refine((v) => Buffer.from(v, "base64").length === 32, "must be 32 bytes, base64-encoded");
 
 const serverSchema = publicSchema.extend({
-  SUPABASE_SECRET_KEY: z.string().min(20),
+  DATABASE_URL: z.string().startsWith("postgres"),
+  // Only needed when Supabase sign-in is switched on.
+  SUPABASE_SECRET_KEY: z.string().min(20).optional(),
   APP_ENCRYPTION_KEY: base64Key32,
   IP_HASH_SALT: z.string().min(16),
   CRON_SECRET: z.string().min(16),

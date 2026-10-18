@@ -64,7 +64,7 @@ describe("env parsing", () => {
   };
   const server = {
     ...pub,
-    SUPABASE_SECRET_KEY: "sb_secret_0123456789abcdefghij",
+    DATABASE_URL: "postgres://u:p@localhost:5432/db",
     APP_ENCRYPTION_KEY: Buffer.alloc(32, 1).toString("base64"),
     IP_HASH_SALT: "0123456789abcdef",
     CRON_SECRET: "0123456789abcdef",
@@ -88,7 +88,7 @@ describe("env parsing", () => {
   });
 
   it("requires every server secret", () => {
-    for (const key of ["SUPABASE_SECRET_KEY", "IP_HASH_SALT", "CRON_SECRET"] as const) {
+    for (const key of ["DATABASE_URL", "IP_HASH_SALT", "CRON_SECRET"] as const) {
       expect(() => parseServerEnv({ ...server, [key]: undefined })).toThrow(new RegExp(key));
     }
   });

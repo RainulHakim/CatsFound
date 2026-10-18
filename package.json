@@ -17,20 +17,24 @@
     "test:http": "playwright test --project=http",
     "test:e2e": "playwright test --project=e2e --project=a11y",
     "db:check": "vitest run --project pglite",
-    "db:push": "supabase db push --db-url \"$SUPABASE_DB_URL\" --include-seed"
+    "db:migrate": "node scripts/db-migrate.mjs"
   },
   "dependencies": {
     "@sentry/nextjs": "^11.8.0",
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.118.0",
+    "@vercel/blob": "^2.8.2",
+    "blurhash": "^2.0.5",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "file-type": "^22.2.0",
     "lucide-react": "^1.59.0",
     "next": "16.4.2",
     "pino": "^10.4.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "server-only": "^0.0.1",
+    "sharp": "^0.35.5",
     "tailwind-merge": "^3.7.0",
     "zod": "^4.6.7"
   },

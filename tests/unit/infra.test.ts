@@ -14,6 +14,11 @@ vi.mock("@supabase/ssr", () => ({
   createServerClient: (...a: unknown[]) => createServerClientMock(...a),
 }));
 vi.mock("next/headers", () => ({ cookies: async () => cookieStore }));
+const dbQuery = vi.fn();
+vi.mock("@/lib/db/sql", () => ({
+  withActor: async (_actor: unknown, fn: (db: { query: typeof dbQuery }) => unknown) =>
+    fn({ query: dbQuery }),
+}));
 vi.mock("@/lib/log", () => ({ log: { error: vi.fn(), warn: vi.fn(), info: vi.fn() } }));
 
 const ENV = {
@@ -21,6 +26,7 @@ const ENV = {
   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "sb_publishable_0123456789abcdef",
   NEXT_PUBLIC_SITE_URL: "https://catfound.example",
   SUPABASE_SECRET_KEY: "sb_secret_0123456789abcdefghij",
+  DATABASE_URL: "postgres://u:p@localhost:5432/db",
   APP_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString("base64"),
   IP_HASH_SALT: "0123456789abcdef",
   CRON_SECRET: "0123456789abcdef",
@@ -80,23 +86,23 @@ describe("Supabase clients", () => {
 });
 
 describe("dbLimiter", () => {
-  it("calls rate_limit_hit and returns its verdict", async () => {
+  it("calls rate_limit_hit with parameters and returns its verdict", async () => {
     const { dbLimiter } = await import("@/lib/rate-limit");
-    rpc.mockResolvedValueOnce({ data: true, error: null });
+    dbQuery.mockResolvedValueOnce({ rows: [{ ok: true }] });
     expect(await dbLimiter("k", 60, 3)).toBe(true);
-    expect(rpc).toHaveBeenCalledWith("rate_limit_hit", {
-      p_key: "k",
-      p_window_seconds: 60,
-      p_max: 3,
-    });
-    rpc.mockResolvedValueOnce({ data: false, error: null });
+    expect(dbQuery).toHaveBeenCalledWith("select public.rate_limit_hit($1, $2, $3) as ok", [
+      "k",
+      60,
+      3,
+    ]);
+    dbQuery.mockResolvedValueOnce({ rows: [{ ok: false }] });
     expect(await dbLimiter("k", 60, 3)).toBe(false);
   });
 
   it("fails closed when the database errors", async () => {
     const { dbLimiter } = await import("@/lib/rate-limit");
-    rpc.mockResolvedValueOnce({ data: null, error: { message: "down" } });
-    expect(await dbLimiter("signin:email:x", 60, 3)).toBe(false);
+    dbQuery.mockRejectedValueOnce(new Error("down"));
+    expect(await dbLimiter("post:ip:x", 60, 3)).toBe(false);
   });
 });
 
@@ -129,34 +135,22 @@ describe("cn", () => {
 });
 
 describe("/api/health", () => {
-  function supabaseReturning(result: unknown) {
-    createClientMock.mockReturnValueOnce({
-      from: () => ({ select: () => ({ limit: async () => result }) }),
-    } as never);
-  }
-
   it("is ok when the database answers", async () => {
     const { GET } = await import("@/app/api/health/route");
-    supabaseReturning({ error: null, status: 200 });
+    dbQuery.mockResolvedValueOnce({ rows: [{}] });
     const res = await GET();
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({ status: "ok", checks: { db: "ok" } });
     expect(res.headers.get("cache-control")).toBe("no-store");
   });
 
-  it("is degraded (503) when the schema is missing or the query errors", async () => {
+  it("is degraded (503) when the schema is missing or the database is unreachable", async () => {
     const { GET } = await import("@/app/api/health/route");
-    supabaseReturning({ error: { message: "missing" }, status: 404 });
+    dbQuery.mockRejectedValueOnce(new Error('relation "public.campuses" does not exist'));
     expect((await GET()).status).toBe(503);
-    supabaseReturning({ error: null, status: 404 });
-    expect((await GET()).status).toBe(503);
-  });
-
-  it("is degraded when the database is unreachable", async () => {
-    const { GET } = await import("@/app/api/health/route");
-    createClientMock.mockImplementationOnce(() => {
-      throw new Error("ECONNREFUSED");
-    });
-    expect((await GET()).status).toBe(503);
+    dbQuery.mockRejectedValueOnce(new Error("ECONNREFUSED"));
+    const res = await GET();
+    expect(res.status).toBe(503);
+    expect(JSON.stringify(await res.json())).not.toMatch(/ECONNREFUSED|relation/);
   });
 });
