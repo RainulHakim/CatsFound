@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { getUser } from "@/lib/auth";
+import { isAuthEnabled } from "@/lib/auth/enabled";
 import { parseTheme, THEME_COOKIE } from "@/lib/theme";
 import "./globals.css";
 
@@ -26,7 +27,7 @@ export const viewport: Viewport = {
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {
   const theme = parseTheme((await cookies()).get(THEME_COOKIE)?.value);
-  const user = await getUser();
+  const user = isAuthEnabled() ? await getUser() : null;
 
   return (
     <html lang="en" data-theme={theme === "system" ? undefined : theme}>
