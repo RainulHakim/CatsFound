@@ -96,7 +96,10 @@ describe("browse_items", () => {
       "select * from public.browse_items(p_category => $1)",
       [cat!.id],
     );
-    expect(filtered.map((r) => r.id)).toEqual([wallet]);
+    // Other test files may share this database, so check membership, not equality.
+    expect(filtered.map((r) => r.id)).toContain(wallet);
+    expect(filtered.map((r) => r.id)).not.toContain(bottle);
+    expect(filtered.every((r) => r.category_name === "Wallet")).toBe(true);
 
     const first = await as<{ id: string; created_at: string }>(
       db,
