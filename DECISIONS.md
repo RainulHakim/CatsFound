@@ -47,3 +47,33 @@ No Docker on the dev machine. Local development points at a hosted Supabase dev 
 ## 2026-10-17 — Sign-in switched off behind `AUTH_ENABLED`
 
 Sign-in failed on the hosted project for three setup reasons, none of them code bugs: `SUPABASE_SECRET_KEY` was missing, so the action crashed on the env check; the migrations hadn't been applied, so there was no rate-limit function and no `users` table; and custom SMTP wasn't configured. Following rule 7 (if it doesn't work, it isn't in the UI), sign-in is hidden behind a server-side `AUTH_ENABLED=true` flag. Off means no sign-in links, 404 on `/sign-in` and `/auth/confirm`, and the Server Actions refuse requests even if called directly by action ID. It's an explicit flag rather than auto-detection, because no environment check can confirm that SMTP actually delivers mail. The sign-in actions now catch provider and configuration errors and show a message instead of crashing the page. CI and the Playwright test server run with the flag on, so the sign-in path stays tested.
+
+## 2026-10-18: Neon + Vercel Blob instead of Supabase (for now)
+
+You wanted a working demo, and every Supabase route needed a dashboard step that didn't complete: a missing secret key, a token that never reached `.env.local`, and a Vercel–Supabase marketplace install that never registered. Neon could be provisioned entirely from the Vercel CLI, so after you chose it explicitly, the app now runs on:
+
+- **Neon Postgres** for data. The same migrations run there. `db/bootstrap.sql` recreates the slice of Supabase they assume: the `anon`/`authenticated`/`service_role` roles, `auth.uid()` reading `request.jwt.claim.sub`, and `auth.users`. The PGlite test harness uses the same file.
+- **RLS still applies.** Every request runs in a transaction through `withActor`. Public reads use `SET LOCAL ROLE anon`, so grants and policies are enforced exactly as on Supabase. Server writes (posting, jobs) run as the owner after the server has validated them.
+- **Private Vercel Blob** for photos. Objects aren't publicly addressable. `/api/photos/[id]/[width]` asks the database whether the photo may be shown (an open item, not in a sensitive category) and streams it. That replaces Supabase's 15-minute signed URLs; the effect is the same, since a photo stops being served as soon as its item is claimed or turns out to be sensitive (with a 5-minute cache).
+- **Trade-off:** the sign-in code is written for Supabase Auth and stays switched off. Bringing it back means a Supabase project used only for auth, or another provider (Neon Auth is provisioned), behind `lib/auth`.
+
+## 2026-10-18: Public browsing while sign-in is off
+
+SPEC §10.2 says the item index should be visible only to signed-in users. With sign-in off, a gated index would make the site useless for a demo, so `browse_items` / `get_item` / `photo_object` are granted to `anon`. Everything else in §10 still holds:
+
+- `noindex` plus `robots.txt` disallow on `/items`.
+- No photos or details for sensitive items.
+- Finder identity and the secret are never selected.
+- Building-level location only.
+
+**Revoke `anon` execute on those three functions when sign-in returns.**
+
+## 2026-10-18: Phase 1 implementation notes
+
+- **Photos are resized in the browser to 1600px JPEG before upload**, which takes about 0.1 s on a phone. That keeps four photos under Vercel's 4.5 MB request cap (Server Action limit set to 4.4 MB). The server still sniffs the type, re-encodes to WebP at 400/800/1600, and drops all metadata; that step is tested with GPS-tagged fixtures.
+- **Measured locally against the live database:** form load 0.6 s, photo resize 0.1 s, submit to confirmation 2.1 s. That leaves over 10 s of the 15 s budget for the person.
+- **Blurhash placeholders are decoded server-side into tiny PNG data URIs** rendered as an `<img>` under the photo. Inline `style` would break the CSP, and this way it also works without JS.
+- **The drop-off choice comes after posting.** The finder proves they just posted the item with an HMAC token in the success URL, valid for 2 hours. A DB trigger refuses any sensitive item at a point that doesn't accept them.
+- **The "tell me when it's returned" email field isn't shown.** The notification it promises belongs to Phase 3, and rule 7 says unbuilt features don't appear in the UI. The column and encryption are ready.
+- **"I lost something" goes to browse.** Lost-report alerts are Phase 2.
+- **Retention purge built now,** because the privacy page states the 90-day rule.

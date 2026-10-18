@@ -4,11 +4,11 @@ A mobile-friendly web app (for now), launched through the Union, that matches fi
 
 A peer-to-peer lost & found for Davidson College. Finders post in seconds without an account; students search, and (from Phase 2) get an email the moment something matching turns up. See [SPEC.md](SPEC.md) for the product, [PLAN.md](PLAN.md) for the build plan and [DECISIONS.md](DECISIONS.md) for why things are the way they are.
 
-**Status:** Phase 0 (foundation) built. Sign-in is switched off (`AUTH_ENABLED=false`) until the hosted Supabase project is set up; see [Turning on sign-in](#turning-on-sign-in).
+**Status:** Live at **https://catsfound.vercel.app**. Phase 1 (post and browse) is working: anyone can post a found item with photos, and anyone can browse and search what's been found. Sign-in is switched off (`AUTH_ENABLED=false`), so browsing is public for now (still hidden from search engines); see [DECISIONS.md](DECISIONS.md).
 
 ## Stack
 
-Next.js 16 (App Router, TypeScript strict) · Tailwind v4 with CSS-variable tokens · Supabase (Postgres + RLS, Auth, Storage) · Zod · Vercel · Vitest + Playwright + axe.
+Next.js 16 (App Router, TypeScript strict) · Tailwind v4 with CSS-variable tokens · Postgres on **Neon** with row-level security · **Vercel Blob** (private) for photos · sharp for the image pipeline · Zod · Vercel · Vitest + Playwright + axe. Supabase Auth code is kept behind `lib/auth/` for when sign-in returns.
 
 ## Setup
 
@@ -22,52 +22,44 @@ npm run dev                    # http://localhost:3000
 
 ### Environment
 
-| Variable                                                           | Where it comes from                                                                                                 |
-| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
-| `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Supabase → Project Settings → API Keys                                                                              |
-| `SUPABASE_SECRET_KEY`                                              | Same page, **Secret keys**. Server-only; bypasses RLS.                                                              |
-| `SUPABASE_DB_URL`                                                  | Supabase → Connect → _Session pooler_ connection string (includes the DB password). Only used by `npm run db:push`. |
-| `NEXT_PUBLIC_SITE_URL`                                             | `http://localhost:3000` locally; the production URL on Vercel.                                                      |
-| `APP_ENCRYPTION_KEY`                                               | `openssl rand -base64 32`                                                                                           |
-| `IP_HASH_SALT`, `CRON_SECRET`                                      | `openssl rand -hex 32` each                                                                                         |
-| `SENTRY_DSN`                                                       | Optional. Sentry project DSN. Nothing is sent when unset.                                                           |
+The Neon database and Blob store are connected to the Vercel project, so their variables (`DATABASE_URL`, `DATABASE_URL_UNPOOLED`, `BLOB_READ_WRITE_TOKEN`, …) are managed by Vercel. To get them locally:
 
-Set the same variables in Vercel (Project → Settings → Environment Variables), with `NEXT_PUBLIC_SITE_URL` set to the deployed URL.
+```bash
+npx vercel link --project catsfound
+npx vercel env pull .env.local     # merges; keeps your other local values
+```
+
+You also need these values yourself:
+
+| Variable                      | Notes                                                                      |
+| ----------------------------- | -------------------------------------------------------------------------- |
+| `NEXT_PUBLIC_SITE_URL`        | `http://localhost:3000` locally; `https://catsfound.vercel.app` in Vercel  |
+| `APP_ENCRYPTION_KEY`          | `openssl rand -base64 32`. Encrypts the "only the owner would know" detail |
+| `IP_HASH_SALT`, `CRON_SECRET` | `openssl rand -hex 32` each                                                |
+| `AUTH_ENABLED`                | `false` until sign-in is set up                                            |
+| `SENTRY_DSN`                  | Optional                                                                   |
+
+Without `BLOB_READ_WRITE_TOKEN`, photos go to a local `.data/photos` folder instead, which is how CI runs.
+
+> **Note:** the pulled `DATABASE_URL` is the **live** database. Anything you post from `npm run dev` shows up on the real site. For separate dev data, create a Neon branch and point `.env.local` at it.
 
 ### Database
 
-Migrations live in `supabase/migrations`, seed data in `supabase/seed.sql`.
+Migrations live in `supabase/migrations`; `db/bootstrap.sql` adds the few Supabase-style roles and the `auth.uid()` function that plain Postgres doesn't have.
 
 ```bash
-npm run db:push        # applies migrations + seed to the project in SUPABASE_DB_URL
+npm run db:migrate     # bootstrap + new migrations + idempotent seed
 ```
 
-**The building list in `supabase/seed.sql` is a placeholder.** The names are real Davidson buildings, but the coordinates are approximate. Correct them there and re-run the push; the seed is idempotent.
+**The building list in `supabase/seed.sql` is a placeholder.** The names are real Davidson buildings, but the coordinates are approximate. Correct them there and re-run `npm run db:migrate`.
 
-### Supabase dashboard settings (one-time)
+### Retention
 
-Sign-in needs these settings in the hosted project:
+`/api/cron/purge` runs daily via Vercel Cron (`vercel.json`). It deletes items and their photos 90 days after they're collected or archived, expires old lost reports, trims the audit log to one year, and prunes rate-limit counters.
 
-1. **Authentication → URL Configuration.** Set _Site URL_ to the app's URL, and add `<site>/auth/confirm` to _Redirect URLs_.
-2. **Authentication → Emails → SMTP Settings.** Turn on custom SMTP with Resend: host `smtp.resend.com`, port `465`, user `resend`, password = a Resend API key. Supabase's built-in mailer only delivers to project team members.
-   Until a domain is verified in Resend, mail only reaches the address that owns the Resend account.
-3. **Authentication → Emails → Templates.** For both **Magic Link** and **Confirm signup**:
-   - Subject: `Your CatFound sign-in code`.
-   - Body: paste [`supabase/templates/magic_link.html`](supabase/templates/magic_link.html).
-     This template sends a 6-digit code plus a link, and the link works even when it's opened in a phone's mail app.
-4. **Authentication → Providers → Email.** Set _Email OTP expiration_ to `900` seconds and _Email OTP length_ to `6`.
+### Turning on sign-in (later)
 
-The `@davidson.edu` restriction is enforced by a database trigger on `auth.users`, so it holds even if someone calls Supabase Auth directly.
-
-### Turning on sign-in
-
-Sign-in is hidden, and its pages and actions are disabled, while `AUTH_ENABLED` is anything other than `true`. Turn it on only after all of these are done:
-
-1. `SUPABASE_SECRET_KEY` and `SUPABASE_DB_URL` are in `.env.local`.
-2. `npm run db:push` has applied the migrations and seed. `GET /api/health` returns `200` with `"db":"ok"`.
-3. The dashboard settings above are in place: Resend SMTP, the email template, and the redirect URLs.
-
-Then set `AUTH_ENABLED=true`, locally in `.env.local` and in Vercel's environment variables. Sign-in code is tested end-to-end in CI regardless of this flag.
+The magic-link/code sign-in in `lib/auth/` is written for Supabase Auth. Now that data lives in Neon, sign-in needs either a Supabase project used only for auth, or a new provider behind the same `lib/auth` interface; Neon Auth is already provisioned (`NEON_AUTH_BASE_URL`). Until then, keep `AUTH_ENABLED=false`.
 
 ## Scripts
 
@@ -88,7 +80,9 @@ CI (`.github/workflows/ci.yml`) runs all of the above on every push. It starts a
 app/            routes, server actions (app/actions), API routes (app/api)
 components/     UI; components/ui holds the shadcn-style primitives
 lib/auth/       auth interface + Supabase implementation (swap for SSO here)
-lib/db/         Supabase clients, cookie hardening, DB types
+lib/db/         Postgres access (withActor: anon vs service), Supabase auth clients
+lib/images/     upload pipeline: type sniffing, EXIF-stripping WebP re-encode, blurhash
+lib/storage.ts  private photo storage (Vercel Blob, or local folder)
 lib/security/   CSP, CSRF, IP hashing, safe redirects
 lib/validation/ Zod schemas shared by client and server
 proxy.ts        per-request CSP nonce, CSRF check, session refresh
