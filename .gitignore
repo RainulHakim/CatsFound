@@ -56,3 +56,6 @@ supabase/.temp/
 
 # generated for the SQL Editor; rebuild with scripts/build-hosted-setup.mjs
 supabase/hosted-setup.sql
+
+# local photo storage when no Blob token is set
+/.data/
