@@ -6,14 +6,20 @@ import { signOut } from "@/app/actions/auth";
 export function SiteHeader({ user }: { user: SessionUser | null }) {
   return (
     <header className="border-border bg-surface border-b">
-      <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-4">
+      <div className="mx-auto flex h-14 max-w-5xl items-center justify-between gap-2 px-4">
         <Link
           href="/"
           className="text-text flex min-h-11 items-center text-lg font-bold no-underline"
         >
           CatFound
         </Link>
-        <nav aria-label="Account">
+        <nav aria-label="Main" className="flex items-center gap-1">
+          <Link href="/items" className="flex min-h-11 items-center px-2">
+            Browse
+          </Link>
+          <Link href="/found/new" className="flex min-h-11 items-center px-2">
+            Post
+          </Link>
           {!isAuthEnabled() ? null : user ? (
             <form action={signOut}>
               <button
